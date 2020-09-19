@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ContentModelStore">
+    <e p="C:\Dev\Projects\EECS4350_Project0" t="IncludeRecursive">
+      <e p="BasicRoutines.cpp" t="Include" />
+      <e p="EECS4350_Project0.sln" t="IncludeFlat" />
+      <e p="EECS4350_Project0.vcxproj" t="IncludeRecursive" />
+      <e p="LoadShaders.cpp" t="Include" />
+      <e p="LoadShaders.h" t="Include" />
+      <e p="packages" t="ExcludeRecursive" />
+      <e p="vgl.h" t="Include" />
+      <e p="vmath.h" t="Include" />
+      <e p="x64\Debug" t="ExcludeRecursive" />
+    </e>
+    <e p="C:\Users\mikeb\AppData\Local\JetBrains\Rider2020.2\extResources" t="IncludeRecursive" />
+    <e p="C:\Users\mikeb\AppData\Local\JetBrains\Rider2020.2\resharper-host\Local\Transient\Rider\v202\SolutionCaches\_EECS4350_Project0.928553434.00" t="ExcludeRecursive" />
+  </component>
+</project>

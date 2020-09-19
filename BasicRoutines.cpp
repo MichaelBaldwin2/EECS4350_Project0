@@ -1,289 +1,320 @@
-#include <GL/glew.h>
-#include <GL/freeglut.h>
-#include <string>
-#include <iostream>
 #include <cstdlib>
-#include "LoadShaders.h"
-#include "vmath.h"
-#include "vgl.h"
+#include <gl/glew.h>
+#include <gl/freeglut.h>
+#include <iostream>
 #include <map>
+#include <string>
+#include "LoadShaders.h"
+#include "vgl.h"
+#include "vmath.h"
 
 using namespace std;
 
-#define BUFFER_OFFSET(x)  ((const void*) (x))
+#define BUFFER_OFFSET(x) ((const void*) (x))
 
 GLuint programID;
-/*
-* Arrays to store the indices/names of the Vertex Array Objects and
-* Buffers.  Rather than using the books enum approach I've just
-* gone out and made a bunch of them and will use them as needed.
-*
-* Not the best choice I'm sure.
-*/
-
-GLuint vertexBuffers[10], arrayBuffers[10], elementBuffers[10];
-/*
-* Global variables
-*   The location for the transformation and the current rotation
-*   angle are set up as globals since multiple methods need to
-*   access them.
-*/
+GLuint vertexBuffers[10];
+GLuint arrayBuffers[10];
+GLuint elementBuffers[10];
 float rotationAngle;
 bool elements;
-int nbrTriangles, materialToUse=0;
-
+int nbrTriangles = 0;
+int materialToUse = 0;
 map<string, GLuint> locationMap;
 
-// Prototypes
-GLuint buildProgram(string vertexShaderName, string fragmentShaderName);
-int glutStartUp(int & argCount, char *argValues[], 
-	            string windowTitle="No Title", int width = 500, int height = 500);
-void setAttributes(float lineWidth = 1.0, GLenum face = GL_FRONT_AND_BACK, 
-	               GLenum fill = GL_FILL);
-void buildObjects();
-void getLocations();
-void init(string vertexShader, string fragmentShader);
+void Init(string, string);
+int GlutStartUp(int& argCount, char* argValues[], string windowTitle = "No Title", int width = 500, int height = 500);
+GLuint BuildProgram(string, string);
+void SetAttributes(float lineWidth = 1.0, GLenum face = GL_FRONT_AND_BACK, GLenum fill = GL_FILL);
+void BuildObjects();
+void GetLocations();
+void Timer(int);
+void Display();
+void Keypress(unsigned char, int, int);
 
-/*
- * Routine to encapsulate some of the startup routines for GLUT.  It returns the window ID of the
- * single window that is created.
- */
-int glutStartUp(int & argCount, char *argValues[], string title, int width, int height) {
-	int windowID;
-	GLenum glewErrCode;
+int main(int argCount, char* argValues[])
+{
+	GlutStartUp(argCount, argValues, "My Test of New Routines");
+	Init("project0.vert", "project0.frag");
+	glutDisplayFunc(Display);
+	glutTimerFunc(1000 / 30, Timer, 1); 
+	glutKeyboardFunc(Keypress);
+	glutMainLoop();
+}
 
+void Init(string vertexShader, string fragmentShader)
+{
+	SetAttributes(1.0f, GL_FRONT_AND_BACK, GL_FILL);
+	programID = BuildProgram(vertexShader, fragmentShader);
+	BuildObjects();
+	GetLocations();
+}
+
+int GlutStartUp(int& argCount, char* argValues[], string title, int width, int height)
+{
 	glutInit(&argCount, argValues);
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DEPTH);
 	glutInitWindowSize(width, height);
-	windowID = glutCreateWindow(title.c_str());
+	auto windowID = glutCreateWindow(title.c_str());
 
 	glutInitContextVersion(3, 1);
 	glutInitContextProfile(GLUT_CORE_PROFILE);
-	glewErrCode = glewInit();
-	if (glewErrCode != GLEW_OK) {
+	auto glewErrCode = glewInit();
+	if(glewErrCode != GLEW_OK)
+	{
 		cerr << "Glew init failed " << glewErrCode << endl;
 		exit(EXIT_FAILURE);
 	}
 	return windowID;
 }
 
-
-/*
- * Use the author's routines to build the program and return the program ID.  
- */
-GLuint buildProgram(string vertexShaderName, string fragmentShaderName) {
-
-	/*
-	*  Use the Books code to load in the shaders.
-	*/
-	ShaderInfo shaders[] = {
+GLuint BuildProgram(string vertexShaderName, string fragmentShaderName)
+{
+	ShaderInfo shaders[] =
+	{
 		{ GL_VERTEX_SHADER, vertexShaderName.c_str() },
 		{ GL_FRAGMENT_SHADER, fragmentShaderName.c_str() },
 		{ GL_NONE, NULL }
 	};
-	GLuint program = LoadShaders(shaders);
-	if (program == 0) {
+
+	auto program = LoadShaders(shaders);
+	if(program == 0)
+	{
 		cerr << "GLSL Program didn't load.  Error \n" << endl
 			<< "Vertex Shader = " << vertexShaderName << endl
 			<< "Fragment Shader = " << fragmentShaderName << endl;
 	}
+
 	glUseProgram(program);
 	return program;
 }
 
-/*
- * Set up the clear color, lineWidth, and the fill type for the display.
- */
-void setAttributes(float lineWidth,GLenum face, GLenum fill ) {
-	/*
-	* I'm using wide lines so that they are easier to see on the screen.
-	* In addition, this version fills in the polygons rather than leaving it
-	* as lines.
-	*/
+void SetAttributes(float lineWidth, GLenum face, GLenum fill)
+{
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glLineWidth(lineWidth);
 	glPolygonMode(face, fill);
-	glEnable(GL_DEPTH);
-
+	glEnable(GL_DEPTH_TEST);
+	glFrontFace(GL_CCW);
 }
 
-/*
- * read and/or build the objects to be displayed.  Also sets up attributes that are 
- * vertex related.
- */
+void BuildObjects()
+{
+	// Define the cube faces and colors
+	auto scale = 0.5f;
+	auto frontBottomLeft =	vmath::vec3(-1.f, -1.f, -1.f) * scale;
+	auto frontBottomRight =	vmath::vec3(1.f, -1.f, -1.f) * scale;
+	auto frontTopRight =	vmath::vec3(1.f, 1.f, -1.f) * scale;
+	auto frontTopLeft =		vmath::vec3(-1.f, 1.f, -1.f) * scale;
+	auto frontFaceColor1 =	vmath::vec4(1.f, 1.f, 1.f, 1.f);
+	auto frontFaceColor2 =	vmath::vec4(0.f, 0.f, 1.f, 1.f);
 
-void buildObjects() {
-	GLfloat vertices[] = { -0.5, -0.5, -0.5, 1.0,   // Triangle 1
-						   -0.5,  0.5, -0.5, 1.0,
-		                   -0.5,  0.5,  0.5, 1.0,
-		                   -0.5, -0.5, -0.5, 1.0,  // Triangle 2
-		                   -0.5,  0.5,  0.5, 1.0,
-		                   -0.5, -0.5,  0.5, 1.0,
+	auto rightBottomLeft =	vmath::vec3(1.f, -1.f, -1.f) * scale;
+	auto rightBottomRight =	vmath::vec3(1.f, -1.f, 1.f) * scale;
+	auto rightTopRight =	vmath::vec3(1.f, 1.f, 1.f) * scale;
+	auto rightTopLeft =		vmath::vec3(1.f, 1.f, -1.f) * scale;
+	auto rightFaceColor1 =	vmath::vec4(0.f, 1.f, 1.f, 1.f);
+	auto rightFaceColor2 =	vmath::vec4(1.f, 1.f, 0.f, 1.f);
+
+	auto backBottomLeft =	vmath::vec3(1.f, -1.f, 1.f) * scale;
+	auto backBottomRight =	vmath::vec3(-1.f, -1.f, 1.f) * scale;
+	auto backTopRight =		vmath::vec3(-1.f, 1.f, 1.f) * scale;
+	auto backTopLeft =		vmath::vec3(1.f, 1.f, 1.f) * scale;
+	auto backFaceColor1 =	vmath::vec4(1.f, 0.412f, 0.76f, 1.f);
+	auto backFaceColor2 =	vmath::vec4(0.75f, 0.75f, 0.75f, 1.f);
+
+	auto leftBottomLeft =	vmath::vec3(-1.f, -1.f, -1.f) * scale;
+	auto leftBottomRight =	vmath::vec3(-1.f, -1.f, 1.f) * scale;
+	auto leftTopRight =		vmath::vec3(-1.f, 1.f, 1.f) * scale;
+	auto leftTopLeft =		vmath::vec3(-1.f, 1.f, -1.f) * scale;
+	auto leftFaceColor1 =	vmath::vec4(1.f, 0.f, 0.f, 1.f);
+	auto leftFaceColor2 =	vmath::vec4(0.f, 1.f, 0.f, 1.f);
+
+	auto topBottomLeft =	vmath::vec3(-1.f, 1.f, 1.f) * scale;
+	auto topBottomRight =	vmath::vec3(1.f, 1.f, 1.f) * scale;
+	auto topTopRight =		vmath::vec3(1.f, 1.f, -1.f) * scale;
+	auto topTopLeft =		vmath::vec3(-1.f, 1.f, -1.f) * scale;
+	auto topFaceColor1 =	vmath::vec4(1.f, 0.f, 1.f, 1.f);
+	auto topFaceColor2 =	vmath::vec4(1.f, 0.584f, 0.f, 1.f);
+
+	auto bottomBottomLeft =	vmath::vec3(-1.f, -1.f, -1.f) * scale;
+	auto bottomBottomRight =vmath::vec3(1.f, -1.f, -1.f) * scale;
+	auto bottomTopRight =	vmath::vec3(1.f, -1.f, 1.f) * scale;
+	auto bottomTopLeft =	vmath::vec3(-1.f, -1.f, 1.f) * scale;
+	auto bottomFaceColor1 = vmath::vec4(0.294f, 0.f, 0.51f, 1.f);
+	auto bottomFaceColor2 = vmath::vec4(1.f, 0.843f, 0.f, 1.f);
+
+	// Vertex mesh
+	GLfloat vertices[] =
+	{
+		// Front
+		frontBottomLeft[0], frontBottomLeft[1], frontBottomLeft[2], 1.0f,
+		frontBottomRight[0], frontBottomRight[1], frontBottomRight[2], 1.0f,
+		frontTopLeft[0], frontTopLeft[1], frontTopLeft[2], 1.0f,
+		frontTopLeft[0], frontTopLeft[1], frontTopLeft[2], 1.0f,
+		frontBottomRight[0], frontBottomRight[1], frontBottomRight[2], 1.0f,
+		frontTopRight[0], frontTopRight[1], frontTopRight[2], 1.0f,
+
+		// Right
+		rightBottomLeft[0], rightBottomLeft[1], rightBottomLeft[2], 1.0f,
+		rightBottomRight[0], rightBottomRight[1], rightBottomRight[2], 1.0f,
+		rightTopLeft[0], rightTopLeft[1], rightTopLeft[2], 1.0f,
+		rightTopLeft[0], rightTopLeft[1], rightTopLeft[2], 1.0f,
+		rightBottomRight[0], rightBottomRight[1], rightBottomRight[2], 1.0f,
+		rightTopRight[0], rightTopRight[1], rightTopRight[2], 1.0f,
+
+		// Back
+		backBottomLeft[0], backBottomLeft[1], backBottomLeft[2], 1.0f,
+		backBottomRight[0], backBottomRight[1], backBottomRight[2], 1.0f,
+		backTopLeft[0], backTopLeft[1], backTopLeft[2], 1.0f,
+		backTopLeft[0], backTopLeft[1], backTopLeft[2], 1.0f,
+		backBottomRight[0], backBottomRight[1], backBottomRight[2], 1.0f,
+		backTopRight[0], backTopRight[1], backTopRight[2], 1.0f,
+
+		// Left
+		leftBottomLeft[0], leftBottomLeft[1], leftBottomLeft[2], 1.0f,
+		leftBottomRight[0], leftBottomRight[1], leftBottomRight[2], 1.0f,
+		leftTopLeft[0], leftTopLeft[1], leftTopLeft[2], 1.0f,
+		leftTopLeft[0], leftTopLeft[1], leftTopLeft[2], 1.0f,
+		leftBottomRight[0], leftBottomRight[1], leftBottomRight[2], 1.0f,
+		leftTopRight[0], leftTopRight[1], leftTopRight[2], 1.0f,
+
+		// Top
+		topBottomLeft[0], topBottomLeft[1], topBottomLeft[2], 1.0f,
+		topBottomRight[0], topBottomRight[1], topBottomRight[2], 1.0f,
+		topTopLeft[0], topTopLeft[1], topTopLeft[2], 1.0f,
+		topTopLeft[0], topTopLeft[1], topTopLeft[2], 1.0f,
+		topBottomRight[0], topBottomRight[1], topBottomRight[2], 1.0f,
+		topTopRight[0], topTopRight[1], topTopRight[2], 1.0f,
+
+		// Bottom
+		bottomBottomLeft[0], bottomBottomLeft[1], bottomBottomLeft[2], 1.0f,
+		bottomBottomRight[0], bottomBottomRight[1], bottomBottomRight[2], 1.0f,
+		bottomTopLeft[0], bottomTopLeft[1], bottomTopLeft[2], 1.0f,
+		bottomTopLeft[0], bottomTopLeft[1], bottomTopLeft[2], 1.0f,
+		bottomBottomRight[0], bottomBottomRight[1], bottomBottomRight[2], 1.0f,
+		bottomTopRight[0], bottomTopRight[1], bottomTopRight[2], 1.0f
 	};
 
-	GLfloat colors[] = { 1.00, 0.00, 0.00, 1.00,
-		                 0.00, 1.00, 0.00, 1.00,  
-		                 0.00, 0.00, 1.00, 1.00, // Triangle 1 -- RED
-						 0.00, 0.24, 1.00, 1.00,
-		                 0.00, 0.24, 1.00, 1.00,
-		                 0.00, 0.24, 1.00, 1.00, // Triangle 3 -- Blue
+	// Per-vertex color
+	GLfloat colors[] =
+	{
+		// Front
+		frontFaceColor1[0], frontFaceColor1[1], frontFaceColor1[2], frontFaceColor1[3],
+		frontFaceColor1[0], frontFaceColor1[1], frontFaceColor1[2], frontFaceColor1[3],
+		frontFaceColor1[0], frontFaceColor1[1], frontFaceColor1[2], frontFaceColor1[3],
+		frontFaceColor2[0], frontFaceColor2[1], frontFaceColor2[2], frontFaceColor2[3],
+		frontFaceColor2[0], frontFaceColor2[1], frontFaceColor2[2], frontFaceColor2[3],
+		frontFaceColor2[0], frontFaceColor2[1], frontFaceColor2[2], frontFaceColor2[3],
+
+		// Right
+		rightFaceColor1[0], rightFaceColor1[1], rightFaceColor1[2], rightFaceColor1[3],
+		rightFaceColor1[0], rightFaceColor1[1], rightFaceColor1[2], rightFaceColor1[3],
+		rightFaceColor1[0], rightFaceColor1[1], rightFaceColor1[2], rightFaceColor1[3],
+		rightFaceColor2[0], rightFaceColor2[1], rightFaceColor2[2], rightFaceColor2[3],
+		rightFaceColor2[0], rightFaceColor2[1], rightFaceColor2[2], rightFaceColor2[3],
+		rightFaceColor2[0], rightFaceColor2[1], rightFaceColor2[2], rightFaceColor2[3],
+
+		// Back
+		backFaceColor1[0], backFaceColor1[1], backFaceColor1[2], backFaceColor1[3],
+		backFaceColor1[0], backFaceColor1[1], backFaceColor1[2], backFaceColor1[3],
+		backFaceColor1[0], backFaceColor1[1], backFaceColor1[2], backFaceColor1[3],
+		backFaceColor2[0], backFaceColor2[1], backFaceColor2[2], backFaceColor2[3],
+		backFaceColor2[0], backFaceColor2[1], backFaceColor2[2], backFaceColor2[3],
+		backFaceColor2[0], backFaceColor2[1], backFaceColor2[2], backFaceColor2[3],
+
+		// Left
+		leftFaceColor1[0], leftFaceColor1[1], leftFaceColor1[2], leftFaceColor1[3],
+		leftFaceColor1[0], leftFaceColor1[1], leftFaceColor1[2], leftFaceColor1[3],
+		leftFaceColor1[0], leftFaceColor1[1], leftFaceColor1[2], leftFaceColor1[3],
+		leftFaceColor2[0], leftFaceColor2[1], leftFaceColor2[2], leftFaceColor2[3],
+		leftFaceColor2[0], leftFaceColor2[1], leftFaceColor2[2], leftFaceColor2[3],
+		leftFaceColor2[0], leftFaceColor2[1], leftFaceColor2[2], leftFaceColor2[3],
+
+		// Top
+		topFaceColor1[0], topFaceColor1[1], topFaceColor1[2], topFaceColor1[3],
+		topFaceColor1[0], topFaceColor1[1], topFaceColor1[2], topFaceColor1[3],
+		topFaceColor1[0], topFaceColor1[1], topFaceColor1[2], topFaceColor1[3],
+		topFaceColor2[0], topFaceColor2[1], topFaceColor2[2], topFaceColor2[3],
+		topFaceColor2[0], topFaceColor2[1], topFaceColor2[2], topFaceColor2[3],
+		topFaceColor2[0], topFaceColor2[1], topFaceColor2[2], topFaceColor2[3],
+
+		// Bottom
+		bottomFaceColor1[0], bottomFaceColor1[1], bottomFaceColor1[2], bottomFaceColor1[3],
+		bottomFaceColor1[0], bottomFaceColor1[1], bottomFaceColor1[2], bottomFaceColor1[3],
+		bottomFaceColor1[0], bottomFaceColor1[1], bottomFaceColor1[2], bottomFaceColor1[3],
+		bottomFaceColor2[0], bottomFaceColor2[1], bottomFaceColor2[2], bottomFaceColor2[3],
+		bottomFaceColor2[0], bottomFaceColor2[1], bottomFaceColor2[2], bottomFaceColor2[3],
+		bottomFaceColor2[0], bottomFaceColor2[1], bottomFaceColor2[2], bottomFaceColor2[3]
 	};
-
-	float vertexColors[] = {
-		//       r    g    b    a
-		0.0, 0.0, 0.0, 1.0,   // The vertex colors of a unit cube.
-		0.0, 0.0, 1.0, 1.0,
-		};
-
-	GLfloat normals[] = {
-			-1.0, 0.0, 0.0,    -1.0, 0.0, 0.0,    -1.0, 0.0, 0.0,  // Triangle 1
-			-1.0, 0.0, 0.0,    -1.0, 0.0, 0.0,    -1.0, 0.0, 0.0,  // Triangle 2
-	};
-
-
+	
 	glGenVertexArrays(1, vertexBuffers);
 	glBindVertexArray(vertexBuffers[0]);
 
-	// Alternately...
-	// GLuint   vaoID;
-	// glGenVertexArrays(1, &vaoID);
-	// glBindVertexArray(vaoID);
-	//
-
-/*  
- * Test code for internal object.
- */
-	nbrTriangles = 2;
+	nbrTriangles = 12;
 	glGenBuffers(1, &(arrayBuffers[0]));
 	glBindBuffer(GL_ARRAY_BUFFER, arrayBuffers[0]);
-	glBufferData(GL_ARRAY_BUFFER, 
-		sizeof(vertices)+sizeof(colors)+sizeof(normals), 
-		NULL, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices) + sizeof(colors), NULL, GL_STATIC_DRAW);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
 	glBufferSubData(GL_ARRAY_BUFFER, sizeof(vertices), sizeof(colors), colors);
-	glBufferSubData(GL_ARRAY_BUFFER, sizeof(vertices)+sizeof(colors),
-		            sizeof(normals), normals);
-	/*
-	* Set up variables into the shader programs (Note:  We need the
-	* shaders loaded and built into a program before we do this)
-	*/
-	GLuint vPosition = glGetAttribLocation(programID, "vPosition");
+
+	auto vPosition = glGetAttribLocation(programID, "vPosition");
 	glEnableVertexAttribArray(vPosition);
 	glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(0));
 
-	GLuint vColor = glGetAttribLocation(programID, "vColor");
+	auto vColor = glGetAttribLocation(programID, "vColor");
 	glEnableVertexAttribArray(vColor);
-
-	glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0,
-		BUFFER_OFFSET(sizeof(vertices)));
-
-//	GLuint vNormal = glGetAttribLocation(programID, "vNormal");
-//	glEnableVertexAttribArray(vNormal);
-//	glVertexAttribPointer(vNormal, 3, GL_FLOAT, GL_FALSE, 0,
-//		BUFFER_OFFSET(nbrTriangles*12*sizeof(float)));
+	glVertexAttribPointer(vColor, 4, GL_FLOAT, GL_FALSE, 0, BUFFER_OFFSET(sizeof(vertices)));
 }
 
-/*
- * This fills in the locations of most of the uniform variables for the program.
- * there are better ways of handling this but this is good in going directly from
- * what we had. 
- *
- * Revised to get the locations and names of the uniforms from OpenGL.  These
- * are then stored in a map so that we can look up a uniform by name when we 
- * need to use it.  The map is still global but it is a little neater than the 
- * version that used all the locations.  The locations are still there right now 
- * in case that is more useful for you.
- *
- */
-
-void getLocations() {
-	/*
-	 * Find out how many uniforms there are and go out there and get them from the 
-	 * shader program.  The locations for each uniform are stored in a global -- locationMap --
-	 * for later retrieval.
-	 */
+void GetLocations()
+{
 	GLint numberBlocks;
 	char uniformName[1024];
 	int nameLength;
 	GLint size;
 	GLenum type;
 	glGetProgramiv(programID, GL_ACTIVE_UNIFORMS, &numberBlocks);
-	for (int blockIndex = 0; blockIndex < numberBlocks; blockIndex++) {
+	for(auto blockIndex = 0; blockIndex < numberBlocks; blockIndex++)
+	{
 		glGetActiveUniform(programID, blockIndex, 1024, &nameLength, &size, &type, uniformName);
 		cout << uniformName << endl;
 		locationMap[string(uniformName)] = blockIndex;
 	}
 }
 
-void init( string vertexShader, string fragmentShader) {
-
-	setAttributes(1.0f, GL_FRONT_AND_BACK, GL_FILL);
-
-	programID = buildProgram(vertexShader, fragmentShader);
-
-	buildObjects();
-
-	getLocations();
-
-}
-
-/*
-* Timer routine -- when called it increments the angle by 1 degree,
-* tells Glut to redraw the screen, and sets a timer for 1/30 of a
-* second later.
-*/
-void timer(int value) {
+void Timer(int value)
+{
 	rotationAngle += 1.0f;
-	if (rotationAngle >= 360.0)
+	if(rotationAngle >= 360.0)
 		rotationAngle -= 360.0;
 	glutPostRedisplay();
-	glutTimerFunc(1000 / 30, timer, 1);
+	glutTimerFunc(1000 / 30, Timer, 1);
 }
 
-/*
- * The display routine is basically unchanged at this point.
- */
-void display() {
+void Display()
+{
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// needed
+	auto currentMatrix = vmath::rotate(rotationAngle, 0.0f, 1.0f, 0.0f);
 
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// needed
-		vmath::mat4 currentMatrix = vmath::rotate(rotationAngle, 0.0f, 1.0f, 0.0f);
+	glUniformMatrix4fv(locationMap["modelingTransform"], 1, GL_TRUE, currentMatrix);
 
-		glUniformMatrix4fv(locationMap["modelingTransform"], 1, GL_TRUE,
-			               currentMatrix);
+	glBindVertexArray(vertexBuffers[0]);
+	glBindBuffer(GL_ARRAY_BUFFER, arrayBuffers[0]);
+	glDrawArrays(GL_TRIANGLES, 0, nbrTriangles * 3);
 
-		glBindVertexArray(vertexBuffers[0]);
-		glBindBuffer(GL_ARRAY_BUFFER, arrayBuffers[0]);
-		glDrawArrays(GL_TRIANGLES, 0, nbrTriangles * 3);
-
-		glFlush();
+	glFlush();
 }
 
-/*
-* Handle keypresses -- only one recognized in this version is q for quit.
-*/
-
-void keypress(unsigned char key, int x, int y) {
-	switch (key) {
-	case 'q':
-	case 'Q': 
-		exit(0);
-		break;
-
-	default:
-		// do nothing....
-		break;
+void Keypress(unsigned char key, int x, int y)
+{
+	switch(key)
+	{
+		case 'q':
+		case 'Q':
+			exit(0);
+			break;
+		default:
+			break;
 	}
-}
-
-/*
-* Main program with calls for many of the helper routines.
-*/
-int main(int argCount, char *argValues[]) {
-
-	glutStartUp(argCount, argValues, "My Test of New Routines");
-	init("project0.vert", "project0.frag");
-	glutDisplayFunc(display);
-	glutTimerFunc(1000 / 30, timer, 1);
-	glutKeyboardFunc(keypress);
-	glutMainLoop();
 }
